@@ -12,6 +12,8 @@
 # define CAN_UTF8 1
 #endif
 
+#define MAX_CACHED_STATEMENT_SIZE 8192
+
 static SV *
 sql_upgrade_utf8 (SV *sv)
 {
@@ -23,17 +25,17 @@ sql_upgrade_utf8 (SV *sv)
 }
 
 static SV *
-sql_force_utf8 (SV *sv)
+mortalcopy_and_maybe_force_utf8(int utf8, SV *sv)
 {
+  sv = sv_mortalcopy (sv);
 #if CAN_UTF8
-  if (SvPOK (sv))
+  if (utf8 && SvPOK (sv))
     SvUTF8_on (sv);
 #endif
   return sv;
 }
 
 #define maybe_upgrade_utf8(utf8,sv) ((utf8) ? sql_upgrade_utf8 (sv) : (sv))
-#define maybe_force_utf8(utf8,sv)   ((utf8) ? sql_force_utf8   (sv) : (sv))
 
 #define is_dbh(sv) ((sv) && sv_isobject (sv) && sv_derived_from ((sv), "DBI::db"))
 
@@ -292,7 +294,8 @@ sql_exec(...)
 
                 sth = POPs;
 
-                lru_store (dbh, sql, sth);
+                if (SvLEN (sql) < MAX_CACHED_STATEMENT_SIZE)
+                  lru_store (dbh, sql, sth);
               }
 
             PUSHMARK (SP);
@@ -380,14 +383,14 @@ sql_exec(...)
                           break;
                         case G_SCALAR:
                           /* the first element */
-                          XPUSHs (maybe_force_utf8 (ix & 1, *av_fetch ((AV *)SvRV (row), 0, 1)));
+                          XPUSHs (mortalcopy_and_maybe_force_utf8 (ix & 1, *av_fetch ((AV *)SvRV (row), 0, 1)));
                           break;
                         case G_ARRAY:
                           av = (AV *)SvRV (row);
                           count = AvFILL (av) + 1;
                           EXTEND (SP, count);
                           for (arg = 0; arg < count; arg++)
-                            PUSHs (maybe_force_utf8 (ix & 1, AvARRAY (av)[arg]));
+                            PUSHs (mortalcopy_and_maybe_force_utf8 (ix & 1, AvARRAY (av)[arg]));
 
                           break;
                         default:
@@ -422,10 +425,10 @@ sql_exec(...)
                         EXTEND (SP, count);
                         if (columns == 1)
                           for (arg = 0; arg < count; arg++)
-                            PUSHs (maybe_force_utf8 (ix & 1, AvARRAY ((AV *)SvRV (AvARRAY (av)[arg]))[0]));
+                            PUSHs (mortalcopy_and_maybe_force_utf8 (ix & 1, AvARRAY ((AV *)SvRV (AvARRAY (av)[arg]))[0]));
                         else
                           for (arg = 0; arg < count; arg++)
-                            PUSHs (maybe_force_utf8 (ix & 1, AvARRAY (av)[arg]));
+                            PUSHs (mortalcopy_and_maybe_force_utf8 (ix & 1, AvARRAY (av)[arg]));
                       }
                  }
               }

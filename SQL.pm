@@ -46,7 +46,7 @@ use DBI ();
 BEGIN {
    use base qw(Exporter DynaLoader);
 
-   $VERSION = 0.131;
+   $VERSION = 0.141;
    @EXPORT = qw(
          sql_exec  sql_fetch  sql_fetchall  sql_exists sql_insertid $sql_exec
          sql_uexec sql_ufetch sql_ufetchall sql_uexists
@@ -320,7 +320,7 @@ sub sql_insertid($) {
 
 Returns (and possibly changes) the LRU cache size used by C<sql_exec>. The
 default is somewhere around 50 (= the 50 last recently used statements
-will be cached). It shouldn't be too large, since a simple linear listed
+will be cached). It shouldn't be too large, since a simple linear list
 is used for the cache at the moment (which, for small (<100) cache sizes
 is actually quite fast).
 
@@ -418,7 +418,7 @@ Return the login name.
 
 =item $db->password
 
-Return the password (emphasizing the fact that the apssword is stored plaintext ;)
+Return the password (emphasizing the fact that the password is stored plaintext ;)
 
 =cut
 

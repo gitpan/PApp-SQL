@@ -45,7 +45,7 @@ use DBI ();
 BEGIN {
    use base qw(Exporter DynaLoader);
 
-   $VERSION = 0.12;
+   $VERSION = 0.121;
    @EXPORT = qw(
          sql_exec sql_fetch sql_fetchall sql_exists sql_insertid $sql_exec
    );
@@ -301,7 +301,7 @@ database handles.
 sub reinitialize {
    cachesize cachesize 0;
    for (values %dbcache) {
-      eval { $_->disconnect };
+      eval { $_->{InactiveDestroy} = 1 };
    }
    undef %dbcache;
 }

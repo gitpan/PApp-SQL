@@ -46,7 +46,7 @@ use DBI ();
 BEGIN {
    use base qw(Exporter DynaLoader);
 
-   $VERSION = 0.13;
+   $VERSION = 0.131;
    @EXPORT = qw(
          sql_exec  sql_fetch  sql_fetchall  sql_exists sql_insertid $sql_exec
          sql_uexec sql_ufetch sql_ufetchall sql_uexists
@@ -71,15 +71,14 @@ our %dbcache;
 =item $sql_exec
 
 Since the C<sql_exec> family of functions return a statement handle there
-must eb another way to test the return value of the C<execute> call. This
+must be another way to test the return value of the C<execute> call. This
 global variable contains the result of the most recent call to C<execute>
 done by this module.
 
 =item $PApp::SQL::DBH
 
 The default database handle used by this module if no C<$DBH> was
-specified as argument and no C<$DBH> is found in the current package. See
-C<sql_exec> for a discussion.
+specified as argument. See C<sql_exec> for a discussion.
 
 =item $PApp::SQL::Database
 
@@ -113,8 +112,8 @@ __LINE__ work fine as well).
 The reason C<$id> is necessary is that you might specify special connect
 arguments or special flags, or you might want to configure your $DBH
 differently than maybe other applications requesting the same database
-connection. If none of this is becessary for your application you can
-leave $id empty (i.e. "").
+connection. If none of this is necessary for your application you can
+leave C<$id> empty (i.e. "").
 
 If specified, C<$connect> is a callback (e.g. a coderef) that will be
 called each time a new connection is being established, with the new
@@ -165,12 +164,23 @@ statement handle. The command and the statement handle will be cached
 called only once for each distinct sql call (please keep in mind that the
 returned statement will always be the same, so, if you call C<sql_exec>
 with the same dbh and sql-statement twice (e.g. in a subroutine you
-called), the statement handle for the first call mustn't be used.
+called), the statement handle for the first call mustn't not be in use
+anymore, as the subsequent call will re-use the handle.
 
 The database handle (the first argument) is optional. If it is missing,
-C<sql_exec> first tries to use the variable C<$DBH> in the current (=
-calling) package and, if that fails, it tries to use database handle in
-C<$PApp::SQL::DBH>, which you can set before calling these functions.
+it tries to use database handle in C<$PApp::SQL::DBH>, which you can set
+before calling these functions. NOTICE: future and former versions of
+PApp::SQL might also look up the global variable C<$DBH> in the callers
+package.
+
+=begin comment
+
+If it is missing, C<sql_exec> first tries to use the variable C<$DBH>
+in the current (= calling) package and, if that fails, it tries to use
+database handle in C<$PApp::SQL::DBH>, which you can set before calling
+these functions.
+
+=end comment
 
 The actual return value from the C<$sth->execute> call is stored in the
 package-global (and exported) variable C<$sql_exec>.

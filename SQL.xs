@@ -235,13 +235,15 @@ sql_exec(...)
             /* first check wether we should use an explicit db handle */
             if (!is_dbh (dbh))
               {
-                dbh = get_sv ("DBH", FALSE);
+                /* the next line doesn't work - check why later maybe */
+                /* dbh = get_sv ("DBH", FALSE);
                 if (!is_dbh (dbh))
-                  {
+                  {*/
                     dbh = GvSV(DBH);
                     if (!is_dbh (dbh))
-                      croak ("sql_exec: no $DBH found in current package or in PApp::SQL::");
-                  }
+                      croak ("sql_exec: no $DBH argument and no fallback in $PApp::SQL::DBH");
+                      /*croak ("sql_exec: no $DBH found in current package or in PApp::SQL::");
+                  }*/
               }
             else
               arg++; /* we consumed one argument */

@@ -5,11 +5,11 @@ $loaded = 1;
 print "ok 1\n";
 
 eval { sql_exec "" }; 
-print $@ =~ /no \$DBH found/ ? "" : "not ", "ok 2\n";
+print $@ =~ /no \$DBH/ ? "" : "not ", "ok 2\n";
 
 $DBH=5;
 eval { sql_exec "" }; 
-print $@ =~ /no \$DBH found/ ? "" : "not ", "ok 3\n";
+print $@ =~ /no \$DBH/ ? "" : "not ", "ok 3\n";
 undef $DBH;
 
 $db = new PApp::SQL::Database "", "DBI:nodb:nodb", "user", "pass";

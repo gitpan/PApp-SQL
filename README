@@ -37,14 +37,13 @@ DESCRIPTION
   GLOBAL VARIABLES
     $sql_exec
         Since the "sql_exec" family of functions return a statement handle
-        there must eb another way to test the return value of the "execute"
+        there must be another way to test the return value of the "execute"
         call. This global variable contains the result of the most recent
         call to "execute" done by this module.
 
     $PApp::SQL::DBH
         The default database handle used by this module if no $DBH was
-        specified as argument and no $DBH is found in the current package.
-        See "sql_exec" for a discussion.
+        specified as argument. See "sql_exec" for a discussion.
 
     $PApp::SQL::Database
         The current default "PApp::SQL::Database"-object. Future versions
@@ -71,7 +70,7 @@ DESCRIPTION
         The reason $id is necessary is that you might specify special
         connect arguments or special flags, or you might want to configure
         your $DBH differently than maybe other applications requesting the
-        same database connection. If none of this is becessary for your
+        same database connection. If none of this is necessary for your
         application you can leave $id empty (i.e. "").
 
         If specified, $connect is a callback (e.g. a coderef) that will be
@@ -98,13 +97,14 @@ DESCRIPTION
         keep in mind that the returned statement will always be the same,
         so, if you call "sql_exec" with the same dbh and sql-statement twice
         (e.g. in a subroutine you called), the statement handle for the
-        first call mustn't be used.
+        first call mustn't not be in use anymore, as the subsequent call
+        will re-use the handle.
 
         The database handle (the first argument) is optional. If it is
-        missing, "sql_exec" first tries to use the variable $DBH in the
-        current (= calling) package and, if that fails, it tries to use
-        database handle in $PApp::SQL::DBH, which you can set before calling
-        these functions.
+        missing, it tries to use database handle in $PApp::SQL::DBH, which
+        you can set before calling these functions. NOTICE: future and
+        former versions of PApp::SQL might also look up the global variable
+        $DBH in the callers package.
 
         The actual return value from the "$sth-"execute> call is stored in
         the package-global (and exported) variable $sql_exec.

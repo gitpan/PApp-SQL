@@ -3,9 +3,37 @@
 #include "XSUB.h"
 
 #if (PERL_VERSION < 5) || ((PERL_VERSION == 5) && (PERL_SUBVERSION <= 6))
-# define get_sv perl_get_sv
+# define get_sv      perl_get_sv
 # define call_method perl_call_method
+# define call_sv     perl_call_sv
 #endif
+
+#if (PERL_VERSION < 5) || ((PERL_VERSION == 5) && (PERL_SUBVERSION <= 5))
+# define CAN_UTF8 1
+#endif
+
+static SV *
+sql_upgrade_utf8 (SV *sv)
+{
+#if CAN_UTF8
+  if (SvPOK (sv))
+    sv_utf8_upgrade (sv);
+#endif
+  return sv;
+}
+
+static SV *
+sql_force_utf8 (SV *sv)
+{
+#if CAN_UTF8
+  if (SvPOK (sv))
+    SvUTF8_on (sv);
+#endif
+  return sv;
+}
+
+#define maybe_upgrade_utf8(utf8,sv) ((utf8) ? sql_upgrade_utf8 (sv) : (sv))
+#define maybe_force_utf8(utf8,sv)   ((utf8) ? sql_force_utf8   (sv) : (sv))
 
 #define is_dbh(sv) ((sv) && sv_isobject (sv) && sv_derived_from ((sv), "DBI::db"))
 
@@ -21,6 +49,7 @@ typedef struct lru_node {
   GV *execute;
   GV *bind_columns;
   GV *fetch;
+  GV *finish;
 #endif
 } lru_node;
 
@@ -139,6 +168,11 @@ static void lru_cachesize (int size)
 
 static GV *sql_exec;
 static GV *DBH;
+static SV *sv_prepare, *sv_execute, *sv_bind_columns,
+          *sv_fetchrow_arrayref, *sv_fetchall_arrayref,
+          *sv_finish;
+
+#define newconstpv(str) newSVpvn ((str), sizeof (str))
 
 MODULE = PApp::SQL		PACKAGE = PApp::SQL
 
@@ -148,6 +182,16 @@ BOOT:
 {
    sql_exec = gv_fetchpv ("PApp::SQL::sql_exec", TRUE, SVt_PV);
    DBH      = gv_fetchpv ("PApp::SQL::DBH"     , TRUE, SVt_PV);
+
+   if (!sv_prepare)
+     {
+       sv_prepare           = newconstpv ("prepare");
+       sv_execute           = newconstpv ("execute");
+       sv_bind_columns      = newconstpv ("bind_columns");
+       sv_fetchrow_arrayref = newconstpv ("fetchrow_arrayref");
+       sv_fetchall_arrayref = newconstpv ("fetchall_arrayref");
+       sv_finish            = newconstpv ("finish");
+     }
 
    /* apache might BOOT: twice :( */
    if (lru_size)
@@ -169,9 +213,13 @@ cachesize(size = -1)
 void
 sql_exec(...)
 	ALIAS:
-        	sql_fetch    = 1
-                sql_fetchall = 2
-                sql_exists   = 4
+                sql_uexec     = 1
+        	sql_fetch     = 2
+                sql_ufetch    = 3
+                sql_fetchall  = 4
+                sql_ufetchall = 5
+                sql_exists    = 6
+                sql_uexists   = 7
 	PPCODE:
 {
 	if (items == 0)
@@ -220,13 +268,13 @@ sql_exec(...)
 
             sql = ST(arg); arg++;
 
-            if (ix == 4)
+            if ((ix & ~1) == 6)
               {
                 SV *neu = sv_2mortal (newSVpv ("select count(*) > 0 from ", 0));
                 sv_catsv (neu, sql);
                 sv_catpv (neu, " limit 1");
                 sql = neu;
-                ix = 1; /* sql_fetch */
+                ix -= 4; /* sql_fetch */
               }
 
             /* check cache for existing statement handle */
@@ -238,7 +286,7 @@ sql_exec(...)
                 PUSHs (dbh);
                 PUSHs (sql);
                 PUTBACK;
-                count = call_method ("prepare", G_SCALAR);
+                count = call_sv (sv_prepare, G_METHOD | G_SCALAR);
                 SPAGAIN;
 
                 if (count != 1)
@@ -256,7 +304,7 @@ sql_exec(...)
             PUSHs (sth);
             while (items > arg)
               {
-                PUSHs (ST(arg));
+                PUSHs (maybe_upgrade_utf8 (ix & 1, ST(arg)));
                 arg++;
               }
 
@@ -265,7 +313,7 @@ sql_exec(...)
               if (!execute) execute = gv_fetchmethod_autoload(SvSTASH(SvRV(sth)), "execute", 0);
               count = call_sv(GvCV(execute), G_SCALAR);
              }*/
-            count = call_method ("execute", G_SCALAR);
+            count = call_sv (sv_execute, G_METHOD | G_SCALAR);
             SPAGAIN;
 
             if (count != 1)
@@ -293,7 +341,7 @@ sql_exec(...)
                 } while (bind_first != bind_last);
 
                 PUTBACK;
-                count = call_method ("bind_columns", G_SCALAR);
+                count = call_sv (sv_bind_columns, G_METHOD | G_SCALAR);
                 SPAGAIN;
 
                 if (count != 1)
@@ -310,14 +358,14 @@ sql_exec(...)
             /* free our arguments from the stack */
             SP -= items;
 
-            if (ix == 1)
+            if ((ix & ~1) == 2)
               { /* sql_fetch */
                 SV *row;
 
                 PUSHMARK (SP);
                 XPUSHs (sth);
                 PUTBACK;
-                count = call_method ("fetchrow_arrayref", G_SCALAR);
+                count = call_sv (sv_fetchrow_arrayref, G_METHOD | G_SCALAR);
                 SPAGAIN;
 
                 if (count != 1)
@@ -336,14 +384,14 @@ sql_exec(...)
                           break;
                         case G_SCALAR:
                           /* the first element */
-                          XPUSHs (*av_fetch ((AV *)SvRV (row), 0, 1));
+                          XPUSHs (maybe_force_utf8 (ix & 1, *av_fetch ((AV *)SvRV (row), 0, 1)));
                           break;
                         case G_ARRAY:
                           av = (AV *)SvRV (row);
                           count = AvFILL (av) + 1;
                           EXTEND (SP, count);
                           for (arg = 0; arg < count; arg++)
-                            PUSHs (AvARRAY (av)[arg]);
+                            PUSHs (maybe_force_utf8 (ix & 1, AvARRAY (av)[arg]));
 
                           break;
                         default:
@@ -351,14 +399,14 @@ sql_exec(...)
                       }
                  }
               }
-            else if (ix == 2)
+            else if ((ix & ~1) == 4)
               { /* sql_fetchall */
                 SV *rows;
 
                 PUSHMARK (SP);
                 XPUSHs (sth);
                 PUTBACK;
-                count = call_method ("fetchall_arrayref", G_SCALAR);
+                count = call_sv (sv_fetchall_arrayref, G_METHOD | G_SCALAR);
                 SPAGAIN;
 
                 if (count != 1)
@@ -373,27 +421,27 @@ sql_exec(...)
 
                     if (count)
                       {
-                        int columns = AvFILL ((AV *)SvRV (AvARRAY(av)[0])) + 1; /* columns? */
+                        int columns = AvFILL ((AV *) SvRV (AvARRAY (av)[0])) + 1; /* columns? */
 
                         EXTEND (SP, count);
                         if (columns == 1)
                           for (arg = 0; arg < count; arg++)
-                            PUSHs (AvARRAY ((AV *)SvRV (AvARRAY (av)[arg]))[0]);
+                            PUSHs (maybe_force_utf8 (ix & 1, AvARRAY ((AV *)SvRV (AvARRAY (av)[arg]))[0]));
                         else
                           for (arg = 0; arg < count; arg++)
-                            PUSHs (AvARRAY (av)[arg]);
+                            PUSHs (maybe_force_utf8 (ix & 1, AvARRAY (av)[arg]));
                       }
                  }
               }
             else
               XPUSHs (sth);
 
-            if (ix || GIMME_V == G_VOID)
+            if (ix > 1 || GIMME_V == G_VOID)
               {
                 PUSHMARK (SP);
                 XPUSHs (sth);
                 PUTBACK;
-                (void) call_method ("finish", G_DISCARD);
+                (void) call_sv (sv_finish, G_METHOD | G_DISCARD);
                 SPAGAIN;
               }
           }

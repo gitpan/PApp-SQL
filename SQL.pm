@@ -29,7 +29,8 @@ This module provides you with easy-to-use functions to execute sql
 commands (using DBI). Despite being easy to use, they are also quite
 efficient and allow you to write faster programs in less lines of code. It
 should work with anything from perl-5.004_01 onwards, but I only support
-5.005+.
+5.005+. UTF8 handling (the C<sql_u*> family of functions) will only be
+effective with perl version 5.006 and beyond.
 
 If the descriptions here seem terse or if you always wanted to know
 what PApp is then have a look at the PApp module which uses this module
@@ -45,9 +46,10 @@ use DBI ();
 BEGIN {
    use base qw(Exporter DynaLoader);
 
-   $VERSION = 0.121;
+   $VERSION = 0.123;
    @EXPORT = qw(
-         sql_exec sql_fetch sql_fetchall sql_exists sql_insertid $sql_exec
+         sql_exec  sql_fetch  sql_fetchall  sql_exists sql_insertid $sql_exec
+         sql_uexec sql_ufetch sql_ufetchall sql_uexists
    );
    @EXPORT_OK = qw(
          connect_cached
@@ -145,6 +147,8 @@ sub connect_cached {
 
 =item $sth = sql_exec [dbh,] [bind-vals...,] "sql-statement", [arguments...]
 
+=item $sth = sql_uexec <see sql_exec>
+
 C<sql_exec> is the most important and most-used function in this module.
 
 Runs the given sql command with the given parameters and returns the
@@ -165,6 +169,9 @@ package-global (and exported) variable C<$sql_exec>.
 
 If any error occurs C<sql_exec> will throw an exception.
 
+C<sql_uexec> is similar to C<sql_exec> but upgrades all input arguments to
+utf8 before calling the C<execute> method.
+
 Examples:
 
  # easy one
@@ -183,7 +190,9 @@ Examples:
 
 =item sql_fetch <see sql_exec>
 
-Execute a sql-statement and fetch the first row of results. Depending on
+=item sql_ufetch <see sql_uexec>
+
+Execute an sql-statement and fetch the first row of results. Depending on
 the caller context the row will be returned as a list (array context), or
 just the first columns. In table form:
 
@@ -204,7 +213,12 @@ But of course the normal way to call it is simply:
 
 ... and it's still quite fast unless you fetch large amounts of data.
 
+C<sql_ufetch> is similar to C<sql_fetch> but upgrades all input values to
+utf8 and forces all result values to utf8.
+
 =item sql_fetchall <see sql_exec>
+
+=item sql_ufetchall <see sql_uexec>
 
 Similarly to C<sql_fetch>, but all result rows will be fetched (this is
 of course inefficient for large results!). The context is ignored (only
@@ -226,13 +240,21 @@ Examples (all of which are inefficient):
     my ($name, $age, $place) = @$_;
  }
 
+C<sql_ufetchall> is similar to C<sql_fetchall> but upgrades all input
+values to utf8 and forces all result values to utf8.
+
 =item sql_exists "<table> where ...", args...
+
+=item sql_uexists <see sql_exists>
 
 Check wether the result of the sql-statement "select xxx from
 $first_argument" would be empty or not (that is, imagine the string
-"select from" were prepended to your statement (it isn't)). Should work
+"select * from" were prepended to your statement (it isn't)). Should work
 with every database but can be quite slow, except on mysql, where this
 should be quite fast.
+
+C<sql_uexists> is similar to C<sql_exists> but upgrades all parameters to
+utf8.
 
 Examples:
 
@@ -316,9 +338,10 @@ package PApp::SQL::Database;
 
 =head2 THE DATABASE CLASS
 
-Again (sigh) the problem of persistency. What do you do when you have to serialize on object
-that contains (or should contain) a database handle? Short answer: you don't. Long answer:
-you can embed the necessary information to recreate the dbh when needed.
+Again (sigh) the problem of persistency. What do you do when you have
+to serialize on object that contains (or should contain) a database
+handle? Short answer: you don't. Long answer: you can embed the necessary
+information to recreate the dbh when needed.
 
 The C<PApp::SQL::Database> class does that, in a relatively efficient
 fashion: the overhead is currently a single method call per access (you
@@ -368,11 +391,29 @@ sub checked_dbh($) {
 
 Return the DSN (L<DBI>) fo the database object (e.g. for error messages).
 
+=item $db->login
+
+Return the login name.
+
+=item $db->password
+
+Return the password (emphasizing the fact that the apssword is stored plaintext ;)
+
 =cut
 
 sub dsn($) {
    my $self = shift;
    (split /\x00/, $self->[0])[1];
+}
+
+sub login($) {
+   my $self = shift;
+   (split /\x00/, $self->[0])[2];
+}
+
+sub password($) {
+   my $self = shift;
+   (split /\x00/, $self->[0])[3];
 }
 
 =back

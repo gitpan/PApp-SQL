@@ -1,0 +1,7 @@
+MANIFEST
+Makefile.PL
+SQL.pm
+SQL.xs
+historic-perl-implementation
+t/00_load.t
+t/01_err.t

@@ -46,7 +46,7 @@ use DBI ();
 BEGIN {
    use base qw(Exporter DynaLoader);
 
-   $VERSION = 0.142;
+   $VERSION = 0.143;
    @EXPORT = qw(
          sql_exec  sql_fetch  sql_fetchall  sql_exists sql_insertid $sql_exec
          sql_uexec sql_ufetch sql_ufetchall sql_uexists
@@ -188,7 +188,7 @@ package-global (and exported) variable C<$sql_exec>.
 If any error occurs C<sql_exec> will throw an exception.
 
 C<sql_uexec> is similar to C<sql_exec> but upgrades all input arguments to
-utf8 before calling the C<execute> method.
+UTF-8 before calling the C<execute> method.
 
 Examples:
 
@@ -232,9 +232,12 @@ But of course the normal way to call it is simply:
 ... and it's still quite fast unless you fetch large amounts of data.
 
 C<sql_ufetch> is similar to C<sql_fetch> but upgrades all input values to
-utf8 and forces all result values to utf8 (this does I<not> include result
-parameters, only return values. Using bind variables in cinjunction with
-sql_u* functions results in undefined behaviour).
+UTF-8 and forces all result values to UTF-8 (this does I<not> include result
+parameters, only return values. Using bind variables in conjunction with
+sql_u* functions might result in undefined behaviour - we use UTF-8 on
+bind-variables at execution time and it seems to work on DBD::mysql as it
+ignores the UTF-8 bit completely. Which just means that that DBD-driver is
+broken).
 
 =item sql_fetchall <see sql_exec>
 
@@ -261,7 +264,7 @@ Examples (all of which are inefficient):
  }
 
 C<sql_ufetchall> is similar to C<sql_fetchall> but upgrades all input
-values to utf8 and forces all result values to utf8 (see the caveats in
+values to UTF-8 and forces all result values to UTF-8 (see the caveats in
 the description of C<sql_ufetch>, though).
 
 =item sql_exists "<table_references> where <where_condition>...", args...
@@ -275,7 +278,7 @@ with every database but can be quite slow, except on mysql, where this
 should be quite fast.
 
 C<sql_uexists> is similar to C<sql_exists> but upgrades all parameters to
-utf8.
+UTF-8.
 
 Examples:
 

@@ -6,3 +6,4 @@ SQL.xs
 historic-perl-implementation
 t/00_load.t
 t/01_err.t
+META.yml                                 Module meta-data (added by MakeMaker)

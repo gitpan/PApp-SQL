@@ -112,7 +112,7 @@ DESCRIPTION
         If any error occurs "sql_exec" will throw an exception.
 
         "sql_uexec" is similar to "sql_exec" but upgrades all input
-        arguments to utf8 before calling the "execute" method.
+        arguments to UTF-8 before calling the "execute" method.
 
         Examples:
 
@@ -154,10 +154,12 @@ DESCRIPTION
         data.
 
         "sql_ufetch" is similar to "sql_fetch" but upgrades all input values
-        to utf8 and forces all result values to utf8 (this does *not*
+        to UTF-8 and forces all result values to UTF-8 (this does *not*
         include result parameters, only return values. Using bind variables
-        in cinjunction with sql_u* functions results in undefined
-        behaviour).
+        in conjunction with sql_u* functions might result in undefined
+        behaviour - we use UTF-8 on bind-variables at execution time and it
+        seems to work on DBD::mysql as it ignores the UTF-8 bit completely.
+        Which just means that that DBD-driver is broken).
 
     sql_fetchall <see sql_exec>
     sql_ufetchall <see sql_uexec>
@@ -182,8 +184,8 @@ DESCRIPTION
          }
 
         "sql_ufetchall" is similar to "sql_fetchall" but upgrades all input
-        values to utf8 and forces all result values to utf8 (see the caveats
-        in the description of "sql_ufetch", though).
+        values to UTF-8 and forces all result values to UTF-8 (see the
+        caveats in the description of "sql_ufetch", though).
 
     sql_exists "<table_references> where <where_condition>...", args...
     sql_uexists <see sql_exists>
@@ -194,7 +196,7 @@ DESCRIPTION
         where this should be quite fast.
 
         "sql_uexists" is similar to "sql_exists" but upgrades all parameters
-        to utf8.
+        to UTF-8.
 
         Examples:
 

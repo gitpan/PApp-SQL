@@ -339,6 +339,10 @@ sql_exec(...)
                 EXTEND (SP, bind_last - bind_first + 2);
                 PUSHs (sth);
                 do {
+#if CAN_UTF8
+                  if (ix & 1)
+                     SvUTF8_on (SvRV(ST(bind_first)));
+#endif
                   PUSHs (ST(bind_first));
                   bind_first++;
                 } while (bind_first != bind_last);

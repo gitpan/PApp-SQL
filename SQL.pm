@@ -46,7 +46,7 @@ use DBI ();
 BEGIN {
    use base qw(Exporter DynaLoader);
 
-   $VERSION = 0.124;
+   $VERSION = 0.1241;
    @EXPORT = qw(
          sql_exec  sql_fetch  sql_fetchall  sql_exists sql_insertid $sql_exec
          sql_uexec sql_ufetch sql_ufetchall sql_uexists
@@ -125,6 +125,9 @@ Examples:
  # try your luck opening the papp database without access info
  $dbh = connect_cached __FILE__, "DBI:mysql:papp";
 
+Mysql-specific behaviour: The default setting of mysql_client_found_rows
+is TRUE, you can overwrite this, though.
+
 =cut
 
 sub connect_cached {
@@ -132,9 +135,14 @@ sub connect_cached {
    # the following line is duplicated in PApp::SQL::Database::new
    $id = "$id\0$dsn\0$user\0$pass";
    unless ($dbcache{$id} && $dbcache{$id}->ping) {
-      #warn "connecting to ($dsn|$user|$pass|$flags)\n";#d#
       # first, nuke our statement cache (sooory ;)
       cachesize cachesize 0;
+
+      # then make mysql behave more standardly by default
+      $dsn =~ /^[Dd][Bb][Ii]:mysql:/
+         and $dsn !~ /;mysql_client_found_rows/
+            and $dsn .= ";mysql_client_found_rows=1";
+
       # then connect anew
       $dbcache{$id} =
          eval { DBI->connect($dsn, $user, $pass, $flags) }

@@ -35,7 +35,6 @@ DESCRIPTION
     around with to help you create cool applications ;)
 
   GLOBAL VARIABLES
-
     $sql_exec
         Since the "sql_exec" family of functions return a statement handle
         there must eb another way to test the return value of the "execute"
@@ -55,7 +54,6 @@ DESCRIPTION
         object that corresponds to $PApp::SQL::DBH.
 
   FUNCTIONS
-
     $dbh = connect_cached $id, $dsn, $user, $pass, $flags, $connect
         (not exported by by default)
 
@@ -84,6 +82,9 @@ DESCRIPTION
 
          # try your luck opening the papp database without access info
          $dbh = connect_cached __FILE__, "DBI:mysql:papp";
+
+        Mysql-specific behaviour: The default setting of
+        mysql_client_found_rows is TRUE, you can overwrite this, though.
 
     $sth = sql_exec [dbh,] [bind-vals...,] "sql-statement", [arguments...]
     $sth = sql_uexec <see sql_exec>
@@ -233,7 +234,6 @@ DESCRIPTION
         database handles.
 
   THE DATABASE CLASS
-
     Again (sigh) the problem of persistency. What do you do when you have to
     serialize on object that contains (or should contain) a database handle?
     Short answer: you don't. Long answer: you can embed the necessary
@@ -246,9 +246,8 @@ DESCRIPTION
     $db = new <same arguments as "connect_cached">
         The "new" call takes the same arguments as "connect_cached"
         (obviously, if you supply a connect callback it better is
-        serializable, see the PApp::Callback manpage!) and returns a
-        serializable database class. No database handle is actually being
-        created.
+        serializable, see PApp::Callback!) and returns a serializable
+        database class. No database handle is actually being created.
 
     $db->dbh
         Return the database handle as fast as possible (usually just a hash
@@ -259,8 +258,8 @@ DESCRIPTION
         still available and re-open the connection if necessary.
 
     $db->dsn
-        Return the DSN (the DBI manpage) fo the database object (e.g. for
-        error messages).
+        Return the DSN (DBI) fo the database object (e.g. for error
+        messages).
 
     $db->login
         Return the login name.
@@ -270,7 +269,7 @@ DESCRIPTION
         stored plaintext ;)
 
 SEE ALSO
-    the PApp manpage.
+    PApp.
 
 AUTHOR
      Marc Lehmann <pcg@goof.com>

@@ -227,7 +227,7 @@ sql_exec(...)
             SV *sth;
             SV *sql;
             SV *execute;
-            STRLEN dc;
+            STRLEN dc, dd; /* dummy */
 
             /* save our arguments against destruction through function calls */
             SP += items;
@@ -286,7 +286,7 @@ sql_exec(...)
                 if (count != 1)
                   croak ("sql_exec: unable to prepare() statement '%s': %s",
                          SvPV (sql, dc),
-                         SvPV (get_sv ("DBI::errstr", TRUE), dc));
+                         SvPV (get_sv ("DBI::errstr", TRUE), dd));
 
                 sth = POPs;
 
@@ -313,14 +313,14 @@ sql_exec(...)
             if (count != 1)
               croak ("sql_exec: execute() didn't return any value ('%s'): %s",
                      SvPV (sql, dc),
-                     SvPV (get_sv ("DBI::errstr", TRUE), dc));
+                     SvPV (get_sv ("DBI::errstr", TRUE), dd));
 
             execute = POPs;
 
             if (!SvTRUE (execute))
               croak ("sql_exec: unable to execute statement '%s' (%s)",
                      SvPV (sql, dc),
-                     SvPV (get_sv ("DBI::errstr", TRUE), dc));
+                     SvPV (get_sv ("DBI::errstr", TRUE), dd));
 
             sv_setsv (GvSV(sql_exec), execute);
 
@@ -341,12 +341,12 @@ sql_exec(...)
                 if (count != 1)
                   croak ("sql_exec: bind_columns() didn't return any value ('%s'): %s",
                          SvPV (sql, dc),
-                         SvPV (get_sv ("DBI::errstr", TRUE), dc));
+                         SvPV (get_sv ("DBI::errstr", TRUE), dd));
 
                 if (!SvOK (POPs))
                   croak ("sql_exec: bind_columns() didn't return a true ('%s'): %s",
                          SvPV (sql, dc),
-                         SvPV (get_sv ("DBI::errstr", TRUE), dc));
+                         SvPV (get_sv ("DBI::errstr", TRUE), dd));
               }
 
             /* free our arguments from the stack */

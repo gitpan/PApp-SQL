@@ -8,7 +8,7 @@
 # define call_sv     perl_call_sv
 #endif
 
-#if (PERL_VERSION < 5) || ((PERL_VERSION == 5) && (PERL_SUBVERSION <= 5))
+#if (PERL_VERSION > 5) || ((PERL_VERSION == 5) && (PERL_SUBVERSION >= 6))
 # define CAN_UTF8 1
 #endif
 

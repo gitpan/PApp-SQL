@@ -1,6 +1,6 @@
 =head1 NAME
 
-PApp::SQL - absolutely easy yet fast and powerful sql access
+PApp::SQL - absolutely easy yet fast and powerful sql access.
 
 =head1 SYNOPSIS
 
@@ -15,7 +15,7 @@ PApp::SQL - absolutely easy yet fast and powerful sql access
  my $a = sql_fetch "select a from ...";
  sql_fetch \my($a, $b), "select a,b ...";
 
- sql_exists "name from table where name like 'a%'"
+ sql_exists "table where name like 'a%'"
     or die "a* required but not existent";
 
  my $db = new PApp::SQL::Database "", "DBI:mysql:test", "user", "pass";
@@ -46,7 +46,7 @@ use DBI ();
 BEGIN {
    use base qw(Exporter DynaLoader);
 
-   $VERSION = 0.1241;
+   $VERSION = 0.13;
    @EXPORT = qw(
          sql_exec  sql_fetch  sql_fetchall  sql_exists sql_insertid $sql_exec
          sql_uexec sql_ufetch sql_ufetchall sql_uexists
@@ -125,8 +125,8 @@ Examples:
  # try your luck opening the papp database without access info
  $dbh = connect_cached __FILE__, "DBI:mysql:papp";
 
-Mysql-specific behaviour: The default setting of mysql_client_found_rows
-is TRUE, you can overwrite this, though.
+Mysql-specific behaviour: The default setting of
+C<mysql_client_found_rows> is TRUE, you can overwrite this, though.
 
 =cut
 
@@ -222,7 +222,9 @@ But of course the normal way to call it is simply:
 ... and it's still quite fast unless you fetch large amounts of data.
 
 C<sql_ufetch> is similar to C<sql_fetch> but upgrades all input values to
-utf8 and forces all result values to utf8.
+utf8 and forces all result values to utf8 (this does I<not> include result
+parameters, only return values. Using bind variables in cinjunction with
+sql_u* functions results in undefined behaviour).
 
 =item sql_fetchall <see sql_exec>
 
@@ -249,9 +251,10 @@ Examples (all of which are inefficient):
  }
 
 C<sql_ufetchall> is similar to C<sql_fetchall> but upgrades all input
-values to utf8 and forces all result values to utf8.
+values to utf8 and forces all result values to utf8 (see the caveats in
+the description of C<sql_ufetch>, though).
 
-=item sql_exists "<table> where ...", args...
+=item sql_exists "<table_references> where <where_condition>...", args...
 
 =item sql_uexists <see sql_exists>
 

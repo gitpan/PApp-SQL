@@ -1,5 +1,5 @@
 NAME
-    PApp::SQL - absolutely easy yet fast and powerful sql access
+    PApp::SQL - absolutely easy yet fast and powerful sql access.
 
 SYNOPSIS
      use PApp::SQL;
@@ -13,7 +13,7 @@ SYNOPSIS
      my $a = sql_fetch "select a from ...";
      sql_fetch \my($a, $b), "select a,b ...";
 
-     sql_exists "name from table where name like 'a%'"
+     sql_exists "table where name like 'a%'"
         or die "a* required but not existent";
 
      my $db = new PApp::SQL::Database "", "DBI:mysql:test", "user", "pass";
@@ -84,7 +84,7 @@ DESCRIPTION
          $dbh = connect_cached __FILE__, "DBI:mysql:papp";
 
         Mysql-specific behaviour: The default setting of
-        mysql_client_found_rows is TRUE, you can overwrite this, though.
+        "mysql_client_found_rows" is TRUE, you can overwrite this, though.
 
     $sth = sql_exec [dbh,] [bind-vals...,] "sql-statement", [arguments...]
     $sth = sql_uexec <see sql_exec>
@@ -154,7 +154,10 @@ DESCRIPTION
         data.
 
         "sql_ufetch" is similar to "sql_fetch" but upgrades all input values
-        to utf8 and forces all result values to utf8.
+        to utf8 and forces all result values to utf8 (this does *not*
+        include result parameters, only return values. Using bind variables
+        in cinjunction with sql_u* functions results in undefined
+        behaviour).
 
     sql_fetchall <see sql_exec>
     sql_ufetchall <see sql_uexec>
@@ -179,9 +182,10 @@ DESCRIPTION
          }
 
         "sql_ufetchall" is similar to "sql_fetchall" but upgrades all input
-        values to utf8 and forces all result values to utf8.
+        values to utf8 and forces all result values to utf8 (see the caveats
+        in the description of "sql_ufetch", though).
 
-    sql_exists "<table> where ...", args...
+    sql_exists "<table_references> where <where_condition>...", args...
     sql_uexists <see sql_exists>
         Check wether the result of the sql-statement "select xxx from
         $first_argument" would be empty or not (that is, imagine the string

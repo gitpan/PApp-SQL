@@ -303,7 +303,11 @@ sql_exec(...)
             PUSHs (sth);
             while (items > arg)
               {
-                PUSHs (maybe_upgrade_utf8 (ix & 1, ST(arg)));
+                SV *sv = ST(arg);
+                /* we sv_mortalcopy magical values since DBI seems to have a memory
+                 * leak when magical values are passed into execute().
+                 */
+                PUSHs (maybe_upgrade_utf8 (ix & 1, SvMAGICAL(sv) ? sv_mortalcopy(sv) : sv));
                 arg++;
               }
 

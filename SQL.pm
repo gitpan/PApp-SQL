@@ -46,7 +46,7 @@ use DBI ();
 BEGIN {
    use base qw(Exporter DynaLoader);
 
-   $VERSION = 0.123;
+   $VERSION = 0.124;
    @EXPORT = qw(
          sql_exec  sql_fetch  sql_fetchall  sql_exists sql_insertid $sql_exec
          sql_uexec sql_ufetch sql_ufetchall sql_uexists

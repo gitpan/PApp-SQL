@@ -43,8 +43,8 @@ DESCRIPTION
         call to "execute" done by this module.
 
     $PApp::SQL::DBH
-        The default database handle used by this module if no "$DBH" was
-        specified as argument and no "$DBH" is found in the current package.
+        The default database handle used by this module if no $DBH was
+        specified as argument and no $DBH is found in the current package.
         See "sql_exec" for a discussion.
 
     $PApp::SQL::Database
@@ -60,8 +60,8 @@ DESCRIPTION
         (not exported by by default)
 
         Connect to the database given by "($dsn,$user,$pass)", while using
-        the flags from "$flags". These are just the same arguments as given
-        to "DBI-"connect>.
+        the flags from $flags. These are just the same arguments as given to
+        "DBI-"connect>.
 
         The database handle will be cached under the unique id
         "$id|$dsn|$user|$pass". If the same id is requested later, the
@@ -70,15 +70,15 @@ DESCRIPTION
         or module name to the id to make it "more" unique. Things like
         __PACKAGE__ . __LINE__ work fine as well).
 
-        The reason "$id" is necessary is that you might specify special
+        The reason $id is necessary is that you might specify special
         connect arguments or special flags, or you might want to configure
         your $DBH differently than maybe other applications requesting the
         same database connection. If none of this is becessary for your
         application you can leave $id empty (i.e. "").
 
-        If specified, "$connect" is a callback (e.g. a coderef) that will be
+        If specified, $connect is a callback (e.g. a coderef) that will be
         called each time a new connection is being established, with the new
-        "$dbh" as first argument.
+        $dbh as first argument.
 
         Examples:
 
@@ -100,13 +100,13 @@ DESCRIPTION
         first call mustn't be used.
 
         The database handle (the first argument) is optional. If it is
-        missing, "sql_exec" first tries to use the variable "$DBH" in the
+        missing, "sql_exec" first tries to use the variable $DBH in the
         current (= calling) package and, if that fails, it tries to use
-        database handle in "$PApp::SQL::DBH", which you can set before
-        calling these functions.
+        database handle in $PApp::SQL::DBH, which you can set before calling
+        these functions.
 
         The actual return value from the "$sth-"execute> call is stored in
-        the package-global (and exported) variable "$sql_exec".
+        the package-global (and exported) variable $sql_exec.
 
         If any error occurs "sql_exec" will throw an exception.
 

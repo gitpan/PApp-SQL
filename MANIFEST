@@ -1,4 +1,5 @@
 MANIFEST
+COPYING
 Makefile.PL
 SQL.pm
 SQL.xs

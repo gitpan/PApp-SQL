@@ -81,8 +81,6 @@ static SV *lru_fetch(SV *dbh, SV *sql)
 
   lru_hash;
 
-  /*fprintf (stderr, "F: %08lx %s\n", hash, SvPV_nolen (sql));/*D*/
-
   n = &lru_list;
   do {
     n = n->next;
@@ -114,8 +112,6 @@ static void lru_nukeone(void)
   lru_list.prev = n->prev;
   n->prev->next = &lru_list;
 
-  /*fprintf (stderr, "N: %s\n", SvPV_nolen (n->sql));/*D*/
-
   SvREFCNT_dec (n->dbh);
   SvREFCNT_dec (n->sql);
   SvREFCNT_dec (n->sth);
@@ -136,8 +132,6 @@ static void lru_store(SV *dbh, SV *sql, SV *sth)
   dbh = SvRV (dbh);
 
   lru_hash;
-
-  /*fprintf (stderr, "S: %08lx %s\n", hash, SvPV_nolen (sql));/*D*/
 
   lru_size++;
   if (lru_size > lru_maxsize)

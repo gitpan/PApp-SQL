@@ -34,7 +34,7 @@ DESCRIPTION
     extensively but also provides you with a lot more gimmicks to play
     around with to help you create cool applications ;)
 
-  GLOBAL VARIABLES
+  Global Variables
     $sql_exec
         Since the "sql_exec" family of functions return a statement handle
         there must be another way to test the return value of the "execute"
@@ -52,7 +52,7 @@ DESCRIPTION
         this module but might be nice as a placeholder for the database
         object that corresponds to $PApp::SQL::DBH.
 
-  FUNCTIONS
+  Functions
     $dbh = connect_cached $id, $dsn, $user, $pass, $flags, $connect
         (not exported by by default)
 
@@ -239,7 +239,7 @@ DESCRIPTION
         Should be called after "fork" and other accidents that invalidate
         database handles.
 
-  THE DATABASE CLASS
+  The Database Class
     Again (sigh) the problem of persistency. What do you do when you have to
     serialize on object that contains (or should contain) a database handle?
     Short answer: you don't. Long answer: you can embed the necessary
@@ -278,6 +278,6 @@ SEE ALSO
     PApp.
 
 AUTHOR
-     Marc Lehmann <pcg@goof.com>
-     http://www.goof.com/pcg/marc/
+     Marc Lehmann <schmorp@schmorp.de>
+     http://home.schmorp.de/
 

@@ -64,7 +64,7 @@ static int lru_maxsize;
 /* this is primitive, yet effective */
 /* the returned value must never be zero (or bad things will happen) */
 #define lru_hash do {	\
-	hash = (((U32)dbh)>>2);	\
+	hash = (((U32)(long)dbh)>>2);	\
         hash += *statement;\
         hash += len;		\
 } while (0)

@@ -46,7 +46,7 @@ use DBI ();
 BEGIN {
    use base qw(Exporter DynaLoader);
 
-   $VERSION = 0.143;
+   $VERSION = '1.0';
    @EXPORT = qw(
          sql_exec  sql_fetch  sql_fetchall  sql_exists sql_insertid $sql_exec
          sql_uexec sql_ufetch sql_ufetchall sql_uexists
@@ -64,7 +64,7 @@ our $Database;	# the current SQL::Database object, if applicable
 
 our %dbcache;
 
-=head2 GLOBAL VARIABLES
+=head2 Global Variables
 
 =over 4
 
@@ -90,7 +90,7 @@ $PApp::SQL::DBH.
 
 =back
 
-=head2 FUNCTIONS
+=head2 Functions
 
 =over 4
 
@@ -360,7 +360,7 @@ reinitialize;
 
 package PApp::SQL::Database;
 
-=head2 THE DATABASE CLASS
+=head2 The Database Class
 
 Again (sigh) the problem of persistency. What do you do when you have
 to serialize on object that contains (or should contain) a database
@@ -452,8 +452,8 @@ L<PApp>.
 
 =head1 AUTHOR
 
- Marc Lehmann <pcg@goof.com>
- http://www.goof.com/pcg/marc/
+ Marc Lehmann <schmorp@schmorp.de>
+ http://home.schmorp.de/
 
 =cut
 

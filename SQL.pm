@@ -46,7 +46,7 @@ use DBI ();
 BEGIN {
    use base qw(Exporter DynaLoader);
 
-   $VERSION = '1.01';
+   $VERSION = '1.02';
    @EXPORT = qw(
          sql_exec  sql_fetch  sql_fetchall  sql_exists sql_insertid $sql_exec
          sql_uexec sql_ufetch sql_ufetchall sql_uexists
@@ -410,7 +410,7 @@ sub checked_dbh($) {
    my $dbh = $dbcache{$_[0][0]};
    $dbh && $dbh->ping
       ? $dbh
-      : PApp::SQL::connect_cached((split /\x00/, $_[0][0]), $_[0][1], $_[0][2]);
+      : PApp::SQL::connect_cached((split /\x00/, $_[0][0], 4), $_[0][1], $_[0][2]);
 }
 
 =item $db->dsn

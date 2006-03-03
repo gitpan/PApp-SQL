@@ -217,6 +217,7 @@ DESCRIPTION
          postgres: C<oid> column (is there a way to get the last SERIAL?)
          sybase:   C<IDENTITY> column of the last insert (slow)
          informix: C<SERIAL> or C<SERIAL8> column of the last insert
+         sqlite:   C<last_insert_rowid()>
 
         Except for sybase, this does not require a server access.
 

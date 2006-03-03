@@ -46,7 +46,7 @@ use DBI ();
 BEGIN {
    use base qw(Exporter DynaLoader);
 
-   $VERSION = '1.0';
+   $VERSION = '1.01';
    @EXPORT = qw(
          sql_exec  sql_fetch  sql_fetchall  sql_exists sql_insertid $sql_exec
          sql_uexec sql_ufetch sql_ufetchall sql_uexists
@@ -301,6 +301,7 @@ missing, please send me an e-mail on how to implement this ;)
  postgres: C<oid> column (is there a way to get the last SERIAL?)
  sybase:   C<IDENTITY> column of the last insert (slow)
  informix: C<SERIAL> or C<SERIAL8> column of the last insert
+ sqlite:   C<last_insert_rowid()>
 
 Except for sybase, this does not require a server access.
 
@@ -315,6 +316,7 @@ sub sql_insertid($) {
    $driver eq "Pg"       and return $sth->{pg_oid_status};
    $driver eq "Sybase"   and return sql_fetch($dbh, 'SELECT @@IDENTITY');
    $driver eq "Informix" and return $sth->{ix_sqlerrd}[1];
+   $driver eq "SQLite"   and return sql_fetch($dbh, 'SELECT last_insert_rowid ()');
 
    die "sql_insertid does not spport the dbd driver '$driver', please see PApp::SQL::sql_insertid";
 }

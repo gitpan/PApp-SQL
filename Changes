@@ -1,5 +1,8 @@
 This is the change log for the perl extension PApp::SQL.
 
+1.03  Sat Jan 19 09:56:26 CET 2008
+	- work around API changes in perl 5.10.
+
 1.02  Fri Mar  3 15:11:23 CET 2006
 	- fixed a bug with argument passing to connect_cached in checked_dbh.
 	- sqlite sql_insertid support.

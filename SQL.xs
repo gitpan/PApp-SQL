@@ -356,13 +356,15 @@ sql_exec(...)
                          SvPV (sql, dc),
                          SvPV (get_sv ("DBI::errstr", TRUE), dd));
 
-                if (!SvOK (POPs))
+                if (!SvOK (TOPs))
                   croak ("sql_exec: bind_columns() didn't return a true ('%s'): %s",
                          SvPV (sql, dc),
                          SvPV (get_sv ("DBI::errstr", TRUE), dd));
+
+                POPs;
               }
 
-            /* free our arguments from the stack */
+            /* restore our arguments again */
             SP -= items;
 
             if ((ix & ~1) == 2)

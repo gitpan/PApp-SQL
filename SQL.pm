@@ -10,7 +10,7 @@ PApp::SQL - absolutely easy yet fast and powerful sql access.
 
  local $DBH = <database handle>;
  my $st = sql_exec \my($bind_a, $bind_b), "select a,b ...";
- my $st = sql_insertid
+ my $id = sql_insertid
              sql_exec "insert into ... values (?, ?)", $v1, $v2;
  my $a = sql_fetch "select a from ...";
  sql_fetch \my($a, $b), "select a,b ...";
@@ -46,7 +46,7 @@ use DBI ();
 BEGIN {
    use base qw(Exporter DynaLoader);
 
-   $VERSION = '1.02';
+   $VERSION = '1.03';
    @EXPORT = qw(
          sql_exec  sql_fetch  sql_fetchall  sql_exists sql_insertid $sql_exec
          sql_uexec sql_ufetch sql_ufetchall sql_uexists

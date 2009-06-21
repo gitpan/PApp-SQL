@@ -41,12 +41,13 @@ with to help you create cool applications ;)
 
 package PApp::SQL;
 
+use Carp ();
 use DBI ();
 
 BEGIN {
    use base qw(Exporter DynaLoader);
 
-   $VERSION = '1.03';
+   $VERSION = '1.04';
    @EXPORT = qw(
          sql_exec  sql_fetch  sql_fetchall  sql_exists sql_insertid $sql_exec
          sql_uexec sql_ufetch sql_ufetchall sql_uexists
@@ -146,7 +147,7 @@ sub connect_cached {
       $dbcache{$id} =
          eval { DBI->connect($dsn, $user, $pass, $flags) }
          || eval { DBI->connect($dsn, $user, $pass, $flags) }
-         || die "unable to connect to database $dsn: $DBI::errstr\n";
+         || Carp::croak "unable to connect to database $dsn: $DBI::errstr\n";
       $connect->($dbcache{$id}) if $connect;
    }
    $dbcache{$id};
@@ -308,17 +309,17 @@ Except for sybase, this does not require a server access.
 =cut
 
 sub sql_insertid($) {
-   my $sth = shift or die "sql_insertid requires a statement handle";
+   my $sth = shift or Carp::croak "sql_insertid requires a statement handle";
    my $dbh = $sth->{Database};
    my $driver = $dbh->{Driver}{Name};
 
    $driver eq "mysql"    and return $sth->{mysql_insertid};
    $driver eq "Pg"       and return $sth->{pg_oid_status};
-   $driver eq "Sybase"   and return sql_fetch($dbh, 'SELECT @@IDENTITY');
+   $driver eq "Sybase"   and return sql_fetch ($dbh, 'SELECT @@IDENTITY');
    $driver eq "Informix" and return $sth->{ix_sqlerrd}[1];
-   $driver eq "SQLite"   and return sql_fetch($dbh, 'SELECT last_insert_rowid ()');
+   $driver eq "SQLite"   and return sql_fetch ($dbh, 'SELECT last_insert_rowid ()');
 
-   die "sql_insertid does not spport the dbd driver '$driver', please see PApp::SQL::sql_insertid";
+   Carp::croak "sql_insertid does not support the dbd driver '$driver', at";
 }
 
 =item [old-size] = cachesize [new-size]

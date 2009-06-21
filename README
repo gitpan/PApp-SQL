@@ -202,8 +202,8 @@ DESCRIPTION
 
          print "user 7 exists!\n"
             if sql_exists "user where id = ?", 7;
-         
- die "duplicate key"
+ 
+         die "duplicate key"
             if sql_exists "user where name = ? and pass = ?", "stefan", "geheim";
 
     $lastid = sql_insertid $sth

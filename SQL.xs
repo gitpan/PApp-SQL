@@ -241,7 +241,7 @@ sql_exec(...)
                 /* dbh = get_sv ("DBH", FALSE);
                 if (!is_dbh (dbh))
                   {*/
-                    dbh = GvSV(DBH);
+                    dbh = GvSV (DBH);
                     if (!is_dbh (dbh))
                       croak ("sql_exec: no $DBH argument and no fallback in $PApp::SQL::DBH");
                       /*croak ("sql_exec: no $DBH found in current package or in PApp::SQL::");
@@ -249,6 +249,10 @@ sql_exec(...)
               }
             else
               arg++; /* we consumed one argument */
+
+            /* be more Coro-friendly by keeping a copy, so different threads */
+            /* can replace their global handles */
+            dbh = sv_2mortal (newSVsv (dbh));
 
             /* count the remaining references (for bind_columns) */
             bind_first = arg;

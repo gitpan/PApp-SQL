@@ -1,5 +1,10 @@
 This is the change log for the perl extension PApp::SQL.
 
+1.04  Sun Jun 21 02:27:46 CEST 2009
+        - be more Coro/thread friendly by actually making a copy of the
+          database handle inside sql_exec.
+	- use croak for error reporting, not die.
+
 1.03  Sat Jan 19 09:56:26 CET 2008
 	- work around API changes in perl 5.10.
 

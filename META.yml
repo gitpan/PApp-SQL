@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               PApp-SQL
-version:            1.04
+version:            1.05
 abstract:           ~
 author:  []
 license:            unknown
@@ -10,7 +10,7 @@ configure_requires:
 build_requires:
     ExtUtils::MakeMaker:  0
 requires:
-    DBI:  1.13
+    DBI:  1.609
 no_index:
     directory:
         - t

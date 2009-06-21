@@ -2,6 +2,47 @@
 #include "perl.h"
 #include "XSUB.h"
 
+/* import some stuff from DBIXS.h and DBI.xs */
+#define DBIXS_VERSION 93
+#define DBI_MAGIC '~'
+
+#define DBISTATE_PERLNAME "DBI::_dbistate"
+#define DBISTATE_ADDRSV   (perl_get_sv(DBISTATE_PERLNAME, 0x05))
+#define DBIS_PUBLISHED_LVALUE (*(INT2PTR(dbistate_t**, &SvIVX(DBISTATE_ADDRSV))))
+
+struct dbistate_st {
+#define DBISTATE_VERSION  94    /* Must change whenever dbistate_t does */
+    /* this must be the first member in structure                       */
+    void (*check_version) _((const char *name,
+                int dbis_cv, int dbis_cs, int need_dbixs_cv,
+                int drc_s, int dbc_s, int stc_s, int fdc_s));
+
+    /* version and size are used to check for DBI/DBD version mis-match */
+    U16 version;        /* version of this structure                    */
+    U16 size;
+    U16 xs_version;     /* version of the overall DBIXS / DBD interface */
+    U16 spare_pad;
+};
+typedef struct dbistate_st dbistate_t;
+
+#define DBIcf_ACTIVE      0x000004      /* needs finish/disconnect before clear */
+
+typedef U32 imp_sth;
+
+/* not strictly part of the API... */
+static imp_sth *
+sth_get_imp (SV *sth)
+{
+  MAGIC *mg = mg_find (SvRV (sth), PERL_MAGIC_tied);
+  sth = mg->mg_obj;
+  mg = mg_find (SvRV (sth), DBI_MAGIC);
+  return (imp_sth *)SvPVX (mg->mg_obj);
+}
+
+#define DBI_STH_ACTIVE(imp) (*(imp) & DBIcf_ACTIVE)
+
+/* end of import section */
+
 #if (PERL_VERSION < 5) || ((PERL_VERSION == 5) && (PERL_SUBVERSION <= 6))
 # define get_sv      perl_get_sv
 # define call_method perl_call_method
@@ -12,7 +53,7 @@
 # define CAN_UTF8 1
 #endif
 
-#define MAX_CACHED_STATEMENT_SIZE 8192
+#define MAX_CACHED_STATEMENT_SIZE 2048
 
 static SV *
 sql_upgrade_utf8 (SV *sv)
@@ -42,11 +83,12 @@ mortalcopy_and_maybe_force_utf8(int utf8, SV *sv)
 typedef struct lru_node {
   struct lru_node *next;
   struct lru_node *prev;
-  U32 hash;
+  U32 hash; /* bit 31 is used to mark active nodes */
   SV *dbh;
   SV *sql;
 
   SV *sth;
+  imp_sth *sth_imp;
 #if 0 /* method cache */
   GV *execute;
   GV *bind_columns;
@@ -59,19 +101,21 @@ static lru_node lru_list;
 static int lru_size;
 static int lru_maxsize;
 
-#define lru_init lru_list.next = &lru_list; lru_list.prev = &lru_list /* other fields are zero */
+#define lru_init() lru_list.next = &lru_list; lru_list.prev = &lru_list /* other fields are zero */
 
 /* this is primitive, yet effective */
 /* the returned value must never be zero (or bad things will happen) */
-#define lru_hash do {	\
-	hash = (((U32)(long)dbh)>>2);	\
-        hash += *statement;\
-        hash += len;		\
-} while (0)
+#define lru_hash 			\
+  do {					\
+    hash = (((U32)(long)dbh)>>4);	\
+    hash += *statement;			\
+    hash += len;			\
+  } while (0)
 
 /* fetch and "use" */
 /* could be done using a single call (we could call prepare!) */
-static SV *lru_fetch(SV *dbh, SV *sql)
+static SV *
+lru_fetch (SV *dbh, SV *sql)
 {
   lru_node *n;
 
@@ -86,9 +130,11 @@ static SV *lru_fetch(SV *dbh, SV *sql)
   n = &lru_list;
   do {
     n = n->next;
+
     if (!n->hash)
       return 0;
   } while (n->hash != hash
+           || DBI_STH_ACTIVE (n->sth_imp)
            || !sv_eq (n->sql, sql)
            || n->dbh != dbh);
 
@@ -101,64 +147,72 @@ static SV *lru_fetch(SV *dbh, SV *sql)
   lru_list.next->prev = n;
   lru_list.next = n;
 
-  return n->sth;
+  return sv_2mortal (SvREFCNT_inc (n->sth));
 }
 
-static void lru_nukeone(void)
+static void
+lru_trim (void)
 {
-  lru_node *n;
-  /* nuke at the end */
+  while (lru_size > lru_maxsize)
+    {
+      /* nuke at the end */
+      lru_node *n = lru_list.prev;
 
-  n = lru_list.prev;
+      n = lru_list.prev;
 
-  lru_list.prev = n->prev;
-  n->prev->next = &lru_list;
+      lru_list.prev = n->prev;
+      n->prev->next = &lru_list;
 
-  SvREFCNT_dec (n->dbh);
-  SvREFCNT_dec (n->sql);
-  SvREFCNT_dec (n->sth);
-  Safefree (n);
-  
-  lru_size--;
+      SvREFCNT_dec (n->dbh);
+      SvREFCNT_dec (n->sql);
+      SvREFCNT_dec (n->sth);
+      Safefree (n);
+      
+      lru_size--;
+    }
 }
 
 /* store a not-yet existing entry(!) */
-static void lru_store(SV *dbh, SV *sql, SV *sth)
+static void
+lru_store (SV *dbh, SV *sql, SV *sth)
 {
   lru_node *n;
-
   U32 hash;
   STRLEN len;
-  char *statement = SvPV (sql, len);
+  char *statement;
 
+  if (!lru_maxsize)
+    return;
+  
+  statement = SvPV (sql, len);
   dbh = SvRV (dbh);
 
   lru_hash;
 
   lru_size++;
-  if (lru_size > lru_maxsize)
-    lru_nukeone ();
+  lru_trim ();
 
   New (0, n, 1, lru_node);
 
-  n->hash = hash;
-  n->dbh = dbh; SvREFCNT_inc (dbh); /* note: this is the dbi hash itself, not the reference */
-  n->sql = newSVsv (sql);
-  n->sth = sth; SvREFCNT_inc (sth);
+  n->hash    = hash;
+  n->dbh     = dbh; SvREFCNT_inc (dbh); /* note: this is the dbi hash itself, not the reference */
+  n->sql     = newSVsv (sql);
+  n->sth     = sth; SvREFCNT_inc (sth);
+  n->sth_imp = sth_get_imp (sth);
 
-  n->next = lru_list.next;
-  n->prev = &lru_list;
+  n->next    = lru_list.next;
+  n->prev    = &lru_list;
   lru_list.next->prev = n;
   lru_list.next = n;
 }
 
-static void lru_cachesize (int size)
+static void
+lru_cachesize (int size)
 {
   if (size >= 0)
     {
       lru_maxsize = size;
-      while (lru_size > lru_maxsize)
-        lru_nukeone ();
+      lru_trim ();
     }
 }
 
@@ -176,6 +230,12 @@ PROTOTYPES: DISABLE
 
 BOOT:
 {
+   struct dbistate_st *dbis = DBIS_PUBLISHED_LVALUE;
+
+   /* this is actually wrong, we should call the check member, apparently */
+   assert (dbis->version == DBISTATE_VERSION);
+   assert (dbis->xs_version == DBIXS_VERSION);
+
    sql_exec = gv_fetchpv ("PApp::SQL::sql_exec", TRUE, SVt_PV);
    DBH      = gv_fetchpv ("PApp::SQL::DBH"     , TRUE, SVt_PV);
 
@@ -193,7 +253,7 @@ BOOT:
    if (lru_size)
      lru_cachesize (0);
 
-   lru_init;
+   lru_init ();
    lru_cachesize (50);
 }
 

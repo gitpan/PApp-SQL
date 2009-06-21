@@ -1,6 +1,6 @@
 use ExtUtils::MakeMaker;
 
-WriteMakefile(
+WriteMakefile (
     NAME         => 'PApp::SQL',
     VERSION_FROM => 'SQL.pm',
     'dist'	=> {
@@ -10,7 +10,7 @@ WriteMakefile(
 	            SUFFIX	=> '.gz',
 	           },
     'PREREQ_PM'	=> {
-                    DBI		=> 1.13,
+                    DBI		=> 1.609,
 		   },
 );
 

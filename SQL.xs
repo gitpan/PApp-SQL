@@ -7,8 +7,11 @@
 #define DBI_MAGIC '~'
 
 #define DBISTATE_PERLNAME "DBI::_dbistate"
-#define DBISTATE_ADDRSV   (perl_get_sv(DBISTATE_PERLNAME, 0x05))
+#define DBISTATE_ADDRSV   (perl_get_sv (DBISTATE_PERLNAME, 0x05))
 #define DBIS_PUBLISHED_LVALUE (*(INT2PTR(dbistate_t**, &SvIVX(DBISTATE_ADDRSV))))
+
+static SV *sql_varchar, *sql_integer, *sql_double;
+static SV *tmp_iv;
 
 struct dbistate_st {
 #define DBISTATE_VERSION  94    /* Must change whenever dbistate_t does */
@@ -59,7 +62,7 @@ static SV *
 sql_upgrade_utf8 (SV *sv)
 {
 #if CAN_UTF8
-  if (SvPOK (sv))
+  if (SvPOKp (sv))
     sv_utf8_upgrade (sv);
 #endif
   return sv;
@@ -70,7 +73,7 @@ mortalcopy_and_maybe_force_utf8(int utf8, SV *sv)
 {
   sv = sv_mortalcopy (sv);
 #if CAN_UTF8
-  if (utf8 && SvPOK (sv))
+  if (utf8 && SvPOKp (sv))
     SvUTF8_on (sv);
 #endif
   return sv;
@@ -80,21 +83,87 @@ mortalcopy_and_maybe_force_utf8(int utf8, SV *sv)
 
 #define is_dbh(sv) ((sv) && sv_isobject (sv) && sv_derived_from ((sv), "DBI::db"))
 
-typedef struct lru_node {
+typedef struct mc_node
+{
+  struct mc_node *next;
+  HV *stash;
+  U32 gen;
+
+  /* DBH */
+  SV *prepare;
+
+  /* STH */
+  SV *execute;
+  SV *bind_param;
+  SV *bind_columns;
+  SV *fetchrow_arrayref;
+  SV *fetchall_arrayref;
+  SV *finish;
+} mc_node;
+
+static mc_node *first;
+
+static mc_node *
+mc_find (HV *stash)
+{
+  mc_node *mc;
+  U32 gen = PL_sub_generation;
+
+#ifdef HvMROMETA
+  gen += HvMROMETA (stash)->cache_gen;
+#endif
+
+  for (mc = first; mc; mc = mc->next)
+    if (mc->stash == stash && mc->gen == gen)
+      return mc;
+
+  if (!mc)
+    {
+      Newz (0, mc, 1, mc_node);
+      mc->stash = stash;
+
+      mc->next = first;
+      first = mc;
+    }
+  else
+    {
+      mc->execute           =
+      mc->bind_param        =
+      mc->bind_columns      =
+      mc->fetchrow_arrayref =
+      mc->fetchall_arrayref =
+      mc->finish            = 0;
+    }
+
+  mc->gen = gen;
+
+  return mc;
+}
+
+static void
+mc_cache (mc_node *mc, SV **method, const char *name)
+{
+  *method = (SV *)gv_fetchmethod_autoload (mc->stash, name, 0);
+
+  if (!method)
+    croak ("%s: method not found in stash, pelase report.", name);
+}
+
+#define mc_cache(mc, method) mc_cache ((mc), &((mc)->method), # method)
+
+typedef struct lru_node
+{
   struct lru_node *next;
   struct lru_node *prev;
-  U32 hash; /* bit 31 is used to mark active nodes */
+
+  U32 hash;
   SV *dbh;
   SV *sql;
 
   SV *sth;
   imp_sth *sth_imp;
-#if 0 /* method cache */
-  GV *execute;
-  GV *bind_columns;
-  GV *fetch;
-  GV *finish;
-#endif
+
+  mc_node *mc;
 } lru_node;
 
 static lru_node lru_list;
@@ -105,27 +174,31 @@ static int lru_maxsize;
 
 /* this is primitive, yet effective */
 /* the returned value must never be zero (or bad things will happen) */
-#define lru_hash 			\
-  do {					\
-    hash = (((U32)(long)dbh)>>4);	\
-    hash += *statement;			\
-    hash += len;			\
-  } while (0)
+static U32
+lru_hash (SV *dbh, SV *sql)
+{
+  STRLEN i, l;
+  char *b = SvPV (sql, l);
+  U32 hash = 2166136261;
+
+  hash = (hash ^ (U32)dbh) * 16777619U;
+  hash = (hash ^        l) * 16777619U;
+
+  for (i = 7; i < l; i += i >> 2)
+    hash = (hash ^  b [i]) * 16777619U;
+
+  return hash;
+}
 
 /* fetch and "use" */
-/* could be done using a single call (we could call prepare!) */
-static SV *
+static lru_node *
 lru_fetch (SV *dbh, SV *sql)
 {
   lru_node *n;
-
   U32 hash;
-  STRLEN len;
-  char *statement = SvPV (sql, len);
 
   dbh = SvRV (dbh);
-
-  lru_hash;
+  hash = lru_hash (dbh, sql);
 
   n = &lru_list;
   do {
@@ -147,7 +220,7 @@ lru_fetch (SV *dbh, SV *sql)
   lru_list.next->prev = n;
   lru_list.next = n;
 
-  return sv_2mortal (SvREFCNT_inc (n->sth));
+  return n;
 }
 
 static void
@@ -174,20 +247,16 @@ lru_trim (void)
 
 /* store a not-yet existing entry(!) */
 static void
-lru_store (SV *dbh, SV *sql, SV *sth)
+lru_store (SV *dbh, SV *sql, SV *sth, mc_node *mc)
 {
   lru_node *n;
   U32 hash;
-  STRLEN len;
-  char *statement;
 
   if (!lru_maxsize)
     return;
   
-  statement = SvPV (sql, len);
   dbh = SvRV (dbh);
-
-  lru_hash;
+  hash = lru_hash (dbh, sql);
 
   lru_size++;
   lru_trim ();
@@ -199,6 +268,7 @@ lru_store (SV *dbh, SV *sql, SV *sth)
   n->sql     = newSVsv (sql);
   n->sth     = sth; SvREFCNT_inc (sth);
   n->sth_imp = sth_get_imp (sth);
+  n->mc      = mc;
 
   n->next    = lru_list.next;
   n->prev    = &lru_list;
@@ -218,9 +288,6 @@ lru_cachesize (int size)
 
 static GV *sql_exec;
 static GV *DBH;
-static SV *sv_prepare, *sv_execute, *sv_bind_columns,
-          *sv_fetchrow_arrayref, *sv_fetchall_arrayref,
-          *sv_finish;
 
 #define newconstpv(str) newSVpvn ((str), sizeof (str))
 
@@ -236,26 +303,25 @@ BOOT:
    assert (dbis->version == DBISTATE_VERSION);
    assert (dbis->xs_version == DBIXS_VERSION);
 
+   tmp_iv = newSViv (0);
+
    sql_exec = gv_fetchpv ("PApp::SQL::sql_exec", TRUE, SVt_PV);
    DBH      = gv_fetchpv ("PApp::SQL::DBH"     , TRUE, SVt_PV);
-
-   if (!sv_prepare)
-     {
-       sv_prepare           = newconstpv ("prepare");
-       sv_execute           = newconstpv ("execute");
-       sv_bind_columns      = newconstpv ("bind_columns");
-       sv_fetchrow_arrayref = newconstpv ("fetchrow_arrayref");
-       sv_fetchall_arrayref = newconstpv ("fetchall_arrayref");
-       sv_finish            = newconstpv ("finish");
-     }
 
    /* apache might BOOT: twice :( */
    if (lru_size)
      lru_cachesize (0);
 
    lru_init ();
-   lru_cachesize (50);
+   lru_cachesize (100);
 }
+
+void
+boot2 (SV *t_str, SV *t_int, SV *t_dbl)
+	CODE:
+        sql_varchar = newSVsv (t_str);
+        sql_integer = newSVsv (t_int);
+        sql_double  = newSVsv (t_dbl);
 
 int
 cachesize(size = -1)
@@ -282,14 +348,19 @@ sql_exec(...)
           croak ("Usage: sql_exec [database-handle,] [bind-var-refs,... ] \"sql-statement\", [arguments, ...]");
         else
           {
+            int i;
             int arg = 0;
+            int first_execution = 0;
             int bind_first, bind_last;
             int count;
+            lru_node *lru;
             SV *dbh = ST(0);
             SV *sth;
             SV *sql;
             SV *execute;
+            mc_node *mc;
             STRLEN dc, dd; /* dummy */
+            I32 orig_stack = SP - PL_stack_base;
 
             /* save our arguments against destruction through function calls */
             SP += items;
@@ -339,16 +410,41 @@ sql_exec(...)
                 ix -= 4; /* sql_fetch */
               }
 
-            /* check cache for existing statement handle */
-            sth = lru_fetch (dbh, sql);
-            if (!sth)
+            /* now prepare all parameters, by unmagicalising them and upgrading them */
+            for (i = arg; i < items; ++i)
               {
+                SV *sv = ST (i);
+
+                /* we sv_mortalcopy magical values since DBI seems to have a memory
+                 * leak when magical values are passed into execute().
+                 */
+                if (SvMAGICAL (sv))
+                  ST (i) = sv = sv_mortalcopy (sv);
+
+                if ((ix & 1) && SvPOKp (sv) && !SvUTF8 (sv))
+                  {
+                    ST (i) = sv = sv_mortalcopy (sv);
+                    sv_utf8_upgrade (sv);
+                  }
+              }
+
+            /* check cache for existing statement handle */
+            lru = SvCUR (sql) <= MAX_CACHED_STATEMENT_SIZE
+                  ? lru_fetch (dbh, sql)
+                  : 0;
+            if (!lru)
+              {
+                mc = mc_find (SvSTASH (SvRV (dbh)));
+
+                if (!mc->prepare)
+                  mc_cache (mc, prepare);
+
                 PUSHMARK (SP);
                 EXTEND (SP, 2);
                 PUSHs (dbh);
                 PUSHs (sql);
                 PUTBACK;
-                count = call_sv (sv_prepare, G_METHOD | G_SCALAR);
+                count = call_sv (mc->prepare, G_SCALAR);
                 SPAGAIN;
 
                 if (count != 1)
@@ -358,21 +454,79 @@ sql_exec(...)
 
                 sth = POPs;
 
-                if (SvLEN (sql) < MAX_CACHED_STATEMENT_SIZE)
-                  lru_store (dbh, sql, sth);
-              }
+                if (!SvROK (sth))
+                  croak ("sql_exec: buggy DBD driver, prepare returned non-reference for '%s': %s",
+                         SvPV (sql, dc),
+                         SvPV (get_sv ("DBI::errstr", TRUE), dd));
 
-            PUSHMARK (SP);
-            EXTEND (SP, items - arg + 1);
-            PUSHs (sth);
-            while (items > arg)
-              {
-                SV *sv = ST(arg);
-                /* we sv_mortalcopy magical values since DBI seems to have a memory
-                 * leak when magical values are passed into execute().
+                mc = mc_find (SvSTASH (SvRV (sth)));
+
+                if (!mc->bind_param)
+                  {
+                    mc_cache (mc, bind_param);
+                    mc_cache (mc, execute);
+                    mc_cache (mc, finish);
+                  }
+
+                if (SvCUR (sql) <= MAX_CACHED_STATEMENT_SIZE)
+                  lru_store (dbh, sql, sth, mc);
+
+                /* on first execution we unfortunately need to use bind_param
+                 * to mark any numeric parameters as such.
                  */
-                PUSHs (maybe_upgrade_utf8 (ix & 1, SvMAGICAL(sv) ? sv_mortalcopy(sv) : sv));
-                arg++;
+                SvIV_set (tmp_iv, 0);
+
+                while (items > arg)
+                  {
+                    SV *sv = ST (arg);
+                    /* we sv_mortalcopy magical values since DBI seems to have a memory
+                     * leak when magical values are passed into execute().
+                     */
+
+                    PUSHMARK (SP);
+                    EXTEND (SP, 4);
+                    PUSHs (sth);
+                    SvIVX (tmp_iv)++;
+                    PUSHs (tmp_iv);
+                    PUSHs (sv);
+
+                    PUSHs (
+                       SvPOKp (sv) ? sql_varchar
+                     : SvNOKp (sv) ? sql_double
+                     : SvIOKp (sv) ? sql_integer
+                     :               sql_varchar
+                    );
+
+                    PUTBACK;
+                    call_sv (mc->bind_param, G_VOID);
+                    SPAGAIN;
+
+                    arg++;
+                  }
+
+                /* now use execute without any arguments */
+                PUSHMARK (SP);
+                EXTEND (SP, 1);
+                PUSHs (sth);
+              }
+            else
+              {
+                sth = sv_2mortal (SvREFCNT_inc (lru->sth));
+                mc  = lru->mc;
+
+                /* we have previously executed this statement, so we
+                 * use the cached types and use execute with arguments.
+                 */
+
+                PUSHMARK (SP);
+                EXTEND (SP, items - arg + 1);
+                PUSHs (sth);
+                while (items > arg)
+                  {
+                    SV *sv = ST (arg);
+                    PUSHs (ST (arg));
+                    arg++;
+                  }
               }
 
             PUTBACK;
@@ -380,7 +534,7 @@ sql_exec(...)
               if (!execute) execute = gv_fetchmethod_autoload(SvSTASH(SvRV(sth)), "execute", 0);
               count = call_sv(GvCV(execute), G_SCALAR);
              }*/
-            count = call_sv (sv_execute, G_METHOD | G_SCALAR);
+            count = call_sv (mc->execute, G_SCALAR);
             SPAGAIN;
 
             if (count != 1)
@@ -395,7 +549,7 @@ sql_exec(...)
                      SvPV (sql, dc),
                      SvPV (get_sv ("DBI::errstr", TRUE), dd));
 
-            sv_setsv (GvSV(sql_exec), execute);
+            sv_setsv (GvSV (sql_exec), execute);
 
             if (bind_first != bind_last)
               {
@@ -412,7 +566,12 @@ sql_exec(...)
                 } while (bind_first != bind_last);
 
                 PUTBACK;
-                count = call_sv (sv_bind_columns, G_METHOD | G_SCALAR);
+
+                if (!mc->bind_columns)
+                  mc_cache (mc, bind_columns);
+
+                count = call_sv (mc->bind_columns, G_SCALAR);
+
                 SPAGAIN;
 
                 if (count != 1)
@@ -428,9 +587,6 @@ sql_exec(...)
                 POPs;
               }
 
-            /* restore our arguments again */
-            SP -= items;
-
             if ((ix & ~1) == 2)
               { /* sql_fetch */
                 SV *row;
@@ -438,13 +594,19 @@ sql_exec(...)
                 PUSHMARK (SP);
                 XPUSHs (sth);
                 PUTBACK;
-                count = call_sv (sv_fetchrow_arrayref, G_METHOD | G_SCALAR);
+
+                if (!mc->fetchrow_arrayref)
+                  mc_cache (mc, fetchrow_arrayref);
+
+                count = call_sv (mc->fetchrow_arrayref, G_SCALAR);
                 SPAGAIN;
 
                 if (count != 1)
                   abort ();
 
                 row = POPs;
+
+                SP = PL_stack_base + orig_stack;
 
                 if (SvROK (row))
                   {
@@ -458,6 +620,7 @@ sql_exec(...)
                         case G_SCALAR:
                           /* the first element */
                           XPUSHs (mortalcopy_and_maybe_force_utf8 (ix & 1, *av_fetch ((AV *)SvRV (row), 0, 1)));
+                          count = 1;
                           break;
                         case G_ARRAY:
                           av = (AV *)SvRV (row);
@@ -479,13 +642,19 @@ sql_exec(...)
                 PUSHMARK (SP);
                 XPUSHs (sth);
                 PUTBACK;
-                count = call_sv (sv_fetchall_arrayref, G_METHOD | G_SCALAR);
+
+                if (!mc->fetchall_arrayref)
+                  mc_cache (mc, fetchall_arrayref);
+
+                count = call_sv (mc->fetchall_arrayref, G_SCALAR);
                 SPAGAIN;
 
                 if (count != 1)
                   abort ();
 
                 rows = POPs;
+
+                SP = PL_stack_base + orig_stack;
 
                 if (SvROK (rows))
                   {
@@ -507,15 +676,26 @@ sql_exec(...)
                  }
               }
             else
-              XPUSHs (sth);
+              {
+                SP = PL_stack_base + orig_stack;
+                XPUSHs (sth);
+              }
 
             if (ix > 1 || GIMME_V == G_VOID)
               {
+                orig_stack = SP - PL_stack_base;
+
                 PUSHMARK (SP);
                 XPUSHs (sth);
                 PUTBACK;
-                (void) call_sv (sv_finish, G_METHOD | G_DISCARD);
+
+                if (!mc->finish)
+                  mc_cache (mc, finish);
+
+                call_sv (mc->finish, G_DISCARD);
                 SPAGAIN;
+
+                SP = PL_stack_base + orig_stack;
               }
           }
 }

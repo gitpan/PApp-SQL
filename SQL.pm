@@ -47,7 +47,7 @@ use DBI ();
 BEGIN {
    use base qw(Exporter DynaLoader);
 
-   $VERSION = '1.05';
+   $VERSION = '2.0';
    @EXPORT = qw(
          sql_exec  sql_fetch  sql_fetchall  sql_exists sql_insertid $sql_exec
          sql_uexec sql_ufetch sql_ufetchall sql_uexists
@@ -58,6 +58,8 @@ BEGIN {
 
    bootstrap PApp::SQL $VERSION;
 }
+
+boot2 DBI::SQL_VARCHAR, DBI::SQL_INTEGER, DBI::SQL_DOUBLE;
 
 our $sql_exec;  # last result of sql_exec's execute call
 our $DBH;       # the default database handle
@@ -360,6 +362,27 @@ sub reinitialize {
 =cut
 
 reinitialize;
+
+=head2 Type Deduction
+
+Since every database driver seems to deduce parameter types differently,
+usually wrongly, and at leats in the case of DBD::mysql, different in
+every other release or so, and this can and does lead to data corruption,
+this module does type deduction itself.
+
+What does it mean? Simple - sql parameters for placeholders will be
+explicitly marked as SQL_VARCHAR, SQL_INTEGER or SQL_DOUBLE the first time
+a statement is prepared.
+
+To force a specific type, you can either continue to use e.g. sql casts,
+or you can make sure to consistently use strings or numbers. To make a
+perl scalar look enough like a string or a number, use this when passing
+it to sql_exec or a similar functions:
+
+   "$string"   # to pass a string
+   $num+0      # to pass a number
+
+=cut
 
 package PApp::SQL::Database;
 
